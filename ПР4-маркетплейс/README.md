@@ -42,3 +42,5 @@ dotnet test .\ShopSystem.sln
 ```
 
 Результаты сборки, автоматических тестов и HTTP-проверок описаны в [docs/verification.md](docs/verification.md). Архитектуру и исходные требования я вынес в `docs/architecture.md` и `docs/assignment-pr4.md`.
+
+Снимки реальной демонстрации экранов WPF сохранены в `docs/screenshots/`; протокол сценария — в `docs/verification.md`.
