@@ -35,9 +35,9 @@ using (var scope = app.Services.CreateScope()) {
 app.UseAuthentication(); app.UseAuthorization();
 app.MapGet("/api/health", () => Results.Ok(new { status="ok" }));
 app.MapGet("/api/clothing", async (ClothesDb db, string? search) => {
-    var q = db.Clothes.AsNoTracking().Include(x=>x.Sizes).AsQueryable();
-    if (!string.IsNullOrWhiteSpace(search)) q=q.Where(x=>x.Name.Contains(search));
-    return Results.Ok(await q.OrderBy(x=>x.Name).Select(x=>new { x.Id,x.Name,x.Price,x.Description,x.Purchases,x.Type,x.IsAvailable,Sizes=x.Sizes.Select(s=>new {s.Label,s.Number,s.Stock}) }).ToListAsync());
+    var items = await db.Clothes.AsNoTracking().Include(x=>x.Sizes).OrderBy(x=>x.Name).ToListAsync();
+    if (!string.IsNullOrWhiteSpace(search)) items = items.Where(x=>x.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).ToList();
+    return Results.Ok(items.Select(x=>new { x.Id,x.Name,x.Price,x.Description,x.Purchases,x.Type,x.IsAvailable,Sizes=x.Sizes.Select(s=>new {s.Label,s.Number,s.Stock}) }).ToList());
 });
 app.MapPost("/api/users/register", async (RegisterDto dto, ClothesDb db, IPasswordHasher<Customer> hasher) => {
     if (string.IsNullOrWhiteSpace(dto.Login) || dto.Password.Length<8 || string.IsNullOrWhiteSpace(dto.Phone)) return Results.BadRequest(new {error="Укажите логин и телефон; пароль должен быть не короче 8 символов."});
@@ -101,5 +101,3 @@ class SizeStock { public int Id{get;set;} public int ClothingId{get;set;} public
 class CustomerOrder { public int Id{get;set;} public DateTime CreatedAt{get;set;} public string Status{get;set;}="New"; public int CustomerId{get;set;} public Customer? Customer{get;set;} public List<OrderLine> Lines{get;set;}=[]; }
 class OrderLine { public int Id{get;set;} public int CustomerOrderId{get;set;} public CustomerOrder? Order{get;set;} public int ClothingId{get;set;} public int SizeId{get;set;} public int Quantity{get;set;} public decimal UnitPrice{get;set;} public string ClothingName{get;set;}=""; public string SizeLabel{get;set;}=""; }
 class ClothesDb(DbContextOptions<ClothesDb> options):DbContext(options) { public DbSet<Customer> Customers=>Set<Customer>(); public DbSet<Clothing> Clothes=>Set<Clothing>(); public DbSet<SizeStock> Sizes=>Set<SizeStock>(); public DbSet<CustomerOrder> Orders=>Set<CustomerOrder>(); public DbSet<OrderLine> OrderLines=>Set<OrderLine>(); protected override void OnModelCreating(ModelBuilder b){b.Entity<Customer>().HasIndex(x=>x.Login).IsUnique(); b.Entity<Clothing>().Property(x=>x.Price).HasPrecision(10,2); b.Entity<OrderLine>().Property(x=>x.UnitPrice).HasPrecision(10,2); b.Entity<CustomerOrder>().HasOne(x=>x.Customer).WithMany(x=>x.Orders).HasForeignKey(x=>x.CustomerId); b.Entity<SizeStock>().HasOne(x=>x.Clothing).WithMany(x=>x.Sizes).HasForeignKey(x=>x.ClothingId); b.Entity<OrderLine>().HasOne(x=>x.Order).WithMany(x=>x.Lines).HasForeignKey(x=>x.CustomerOrderId);}}
-
-
