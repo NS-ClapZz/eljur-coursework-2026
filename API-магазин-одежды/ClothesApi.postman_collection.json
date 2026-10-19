@@ -1,0 +1,19 @@
+{
+  "info": {"name":"Clothes API PR3","schema":"https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+  "variable":[{"key":"baseUrl","value":"http://localhost:5000"},{"key":"customerCookie","value":""},{"key":"managerCookie","value":""}],
+  "item":[
+    {"name":"Health","request":{"method":"GET","url":"{{baseUrl}}/api/health"}},
+    {"name":"Catalog","request":{"method":"GET","url":"{{baseUrl}}/api/clothing"}},
+    {"name":"Search clothing","request":{"method":"GET","url":"{{baseUrl}}/api/clothing?search=футболка"}},
+    {"name":"Register customer","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"login\":\"customer1\",\"password\":\"ChangeMe123\",\"phone\":\"+70000000000\",\"address\":\"Москва\"}"},"url":"{{baseUrl}}/api/users/register"}},
+    {"name":"Login customer","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"login\":\"customer1\",\"password\":\"ChangeMe123\"}"},"url":"{{baseUrl}}/api/auth/login"}},
+    {"name":"Create order (use sizeId from catalog)","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"items\":[{\"sizeId\":1,\"quantity\":1}] }"},"url":"{{baseUrl}}/api/orders"}},
+    {"name":"My orders","request":{"method":"GET","url":"{{baseUrl}}/api/orders"}},
+    {"name":"Orders by status","request":{"method":"GET","url":"{{baseUrl}}/api/orders?status=New"}},
+    {"name":"Manager login","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"login\":\"manager\",\"password\":\"SET_CLOTHES_MANAGER_PASSWORD\"}"},"url":"{{baseUrl}}/api/auth/login"}},
+    {"name":"Manager change order status (use order id)","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"status\":\"Processing\"}"},"url":"{{baseUrl}}/api/manager/orders/1/status"}},
+    {"name":"Manager update size stock (use size id)","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"stock\":20}"},"url":"{{baseUrl}}/api/manager/sizes/1/stock"}},
+    {"name":"Manager remove clothing from sale","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"isAvailable\":false}"},"url":"{{baseUrl}}/api/manager/clothing/1/availability"}},
+    {"name":"Manager return clothing to sale","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\"isAvailable\":true}"},"url":"{{baseUrl}}/api/manager/clothing/1/availability"}}
+  ]
+}
