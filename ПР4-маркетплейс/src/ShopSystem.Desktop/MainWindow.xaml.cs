@@ -98,6 +98,49 @@ public partial class MainWindow : Window
         StatusText.Text = "Товар добавлен в корзину.";
     }
 
+    private async void Favorites_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var window = new FavoritesWindow(_http) { Owner = this };
+            window.ShowDialog();
+            await LoadCartAsync();
+        }
+        catch (Exception ex) { StatusText.Text = "Войдите в аккаунт, чтобы открыть избранное: " + ex.Message; }
+    }
+
+    private async void AddFavorite_Click(object sender, RoutedEventArgs e)
+    {
+        if (ProductsGrid.SelectedItem is not ProductView product) { StatusText.Text = "Сначала выберите товар."; return; }
+        var response = await _http.PostAsync($"/api/favorites/{product.Id}", null);
+        StatusText.Text = response.IsSuccessStatusCode ? "Товар добавлен в избранное." : response.StatusCode == HttpStatusCode.Conflict ? "Товар уже в избранном." : "Войдите в аккаунт, чтобы добавить товар в избранное.";
+    }
+
+    private async void SubmitReview_Click(object sender, RoutedEventArgs e)
+    {
+        if (ProductsGrid.SelectedItem is not ProductView product) { StatusText.Text = "Сначала выберите товар."; return; }
+        if (ReviewRatingBox.SelectedItem is not ComboBoxItem selected || !int.TryParse(selected.Content?.ToString(), out var rating)) { StatusText.Text = "Выберите оценку от 1 до 5."; return; }
+        var response = await _http.PostAsJsonAsync($"/api/products/{product.Id}/reviews", new { Rating = rating, Text = ReviewTextBox.Text });
+        if (response.StatusCode == HttpStatusCode.Conflict)
+            response = await _http.PutAsJsonAsync($"/api/products/{product.Id}/reviews", new { Rating = rating, Text = ReviewTextBox.Text });
+        if (!response.IsSuccessStatusCode) { StatusText.Text = response.StatusCode == HttpStatusCode.Unauthorized ? "Войдите, чтобы оставить отзыв." : "Не удалось сохранить отзыв. Проверьте оценку и текст."; return; }
+        ReviewTextBox.Clear(); await LoadProductsAsync(SearchBox.Text); StatusText.Text = "Отзыв сохранён; средняя оценка товара обновлена.";
+    }
+
+    private async void Reviews_Click(object sender, RoutedEventArgs e)
+    {
+        if (ProductsGrid.SelectedItem is not ProductView product) { StatusText.Text = "Сначала выберите товар."; return; }
+        try
+        {
+            var result = await _http.GetFromJsonAsync<ReviewsView>($"/api/products/{product.Id}/reviews");
+            if (result is null || result.Items.Length == 0) { MessageBox.Show(this, "Отзывов пока нет.", "Отзывы о товаре"); return; }
+            var text = new StringBuilder($"Средняя оценка: {result.AverageRating:0.##} из 5 · отзывов: {result.Count}{Environment.NewLine}{Environment.NewLine}");
+            foreach (var review in result.Items) text.AppendLine($"{review.UserName} · {review.Rating}/5 · {review.CreatedAtUtc.ToLocalTime():g}").AppendLine(review.Text).AppendLine();
+            MessageBox.Show(this, text.ToString(), "Отзывы о товаре");
+        }
+        catch (Exception ex) { StatusText.Text = "Не удалось загрузить отзывы: " + ex.Message; }
+    }
+
     private async Task LoadCartAsync()
     {
         try
@@ -229,4 +272,6 @@ public partial class MainWindow : Window
     private sealed record BuyRequest(string Fulfillment, string? Address, int? PickupPointId);
     private sealed record OrderDetailsView(int Id, DateTime CreatedAtUtc, decimal Total, string Status, OrderItemView[] Items);
     private sealed record OrderItemView(int ProductId, string ProductNameAtPurchase, decimal UnitPriceAtPurchase, int Quantity, decimal LineTotal);
+    private sealed record ReviewsView(decimal AverageRating, int Count, ReviewView[] Items);
+    private sealed record ReviewView(int Id, int Rating, string Text, DateTime CreatedAtUtc, string UserName);
 }

@@ -27,12 +27,14 @@ public partial class AdminWindow : Window
         await RefreshCategoriesAsync();
         await RefreshPickupAsync();
         await RefreshOrdersAsync();
+        await RefreshReviewsAsync();
     }
 
     private async Task RefreshProductsAsync() => await LoadGridAsync<AdminProduct>("/api/admin/products", ProductsGrid);
     private async Task RefreshCategoriesAsync() => await LoadGridAsync<AdminCategory>("/api/categories", CategoriesGrid);
     private async Task RefreshPickupAsync() => await LoadGridAsync<AdminPickupPoint>("/api/admin/pickup-points", PickupGrid);
     private async Task RefreshOrdersAsync() => await LoadGridAsync<AdminOrder>("/api/admin/orders", OrdersGrid);
+    private async Task RefreshReviewsAsync() => await LoadGridAsync<AdminReview>("/api/admin/reviews", ReviewsGrid);
 
     private async Task LoadGridAsync<T>(string path, DataGrid grid)
     {
@@ -63,7 +65,7 @@ public partial class AdminWindow : Window
         _selectedProduct = ProductsGrid.SelectedItem as AdminProduct;
         if (_selectedProduct is not { } p) return;
         ProductNameBox.Text = p.Name; ProductDescriptionBox.Text = p.Description; ProductPriceBox.Text = p.Price.ToString(CultureInfo.InvariantCulture);
-        ProductImageBox.Text = p.ImagePath; ProductRatingBox.Text = p.Rating.ToString(CultureInfo.InvariantCulture); ProductStockBox.Text = p.Stock.ToString(CultureInfo.InvariantCulture);
+        ProductImageBox.Text = p.ImagePath; ProductStockBox.Text = p.Stock.ToString(CultureInfo.InvariantCulture);
         ProductCategoryIdBox.Text = p.CategoryId.ToString(); ProductAvailableBox.IsChecked = p.IsAvailable;
     }
 
@@ -71,10 +73,9 @@ public partial class AdminWindow : Window
     {
         payload = new { };
         if (!decimal.TryParse(ProductPriceBox.Text, NumberStyles.Number, CultureInfo.InvariantCulture, out var price) ||
-            !decimal.TryParse(ProductRatingBox.Text, NumberStyles.Number, CultureInfo.InvariantCulture, out var rating) ||
             !int.TryParse(ProductStockBox.Text, out var stock) || !int.TryParse(ProductCategoryIdBox.Text, out var categoryId))
-        { StatusText.Text = "Проверьте цену, рейтинг, остаток и ID категории."; return false; }
-        payload = new { Name = ProductNameBox.Text, Description = ProductDescriptionBox.Text, Price = price, ImagePath = ProductImageBox.Text, Rating = rating, Stock = stock, CategoryId = categoryId };
+        { StatusText.Text = "Проверьте цену, остаток и ID категории."; return false; }
+        payload = new { Name = ProductNameBox.Text, Description = ProductDescriptionBox.Text, Price = price, ImagePath = ProductImageBox.Text, Stock = stock, CategoryId = categoryId };
         return true;
     }
 
@@ -164,8 +165,20 @@ public partial class AdminWindow : Window
 
     private async void RefreshOrders_Click(object sender, RoutedEventArgs e) => await RefreshOrdersAsync();
 
+    private async void DeleteReview_Click(object sender, RoutedEventArgs e)
+    {
+        if (ReviewsGrid.SelectedItem is not AdminReview review) { StatusText.Text = "Выберите отзыв."; return; }
+        var answer = MessageBox.Show(this, $"Удалить отзыв пользователя {review.UserName} к товару «{review.Product}»?", "Удаление отзыва", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (answer != MessageBoxResult.Yes) return;
+        await SendAsync(HttpMethod.Delete, $"/api/admin/reviews/{review.Id}");
+        await RefreshReviewsAsync();
+    }
+
+    private async void RefreshReviews_Click(object sender, RoutedEventArgs e) => await RefreshReviewsAsync();
+
     private sealed record AdminProduct(int Id, string Name, string Description, decimal Price, string ImagePath, decimal Rating, int Stock, bool IsAvailable, int CategoryId, string Category);
     private sealed record AdminCategory(int Id, string Name);
     private sealed record AdminPickupPoint(int Id, string Name, string Address, bool IsActive);
     private sealed record AdminOrder(int Id, string Customer, DateTime CreatedAtUtc, decimal Total, string Status);
+    private sealed record AdminReview(int Id, int ProductId, string Product, string UserName, int Rating, string Text, DateTime CreatedAtUtc);
 }

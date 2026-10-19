@@ -36,7 +36,7 @@ using (var scope = app.Services.CreateScope())
         db.Categories.AddRange(categories);
         await db.SaveChangesAsync();
         for (var i = 1; i <= 15; i++)
-            db.Products.Add(new Product { Name = $"Товар {i}", Description = $"Демонстрационный товар каталога {i}", Price = 100m * i, ImagePath = "images/placeholder.svg", Rating = 4.0m + i % 10 / 10m, Stock = 5 + i, CategoryId = categories[(i - 1) % categories.Length].Id });
+            db.Products.Add(new Product { Name = $"Товар {i}", Description = $"Демонстрационный товар каталога {i}", Price = 100m * i, ImagePath = "images/placeholder.svg", Stock = 5 + i, CategoryId = categories[(i - 1) % categories.Length].Id });
         db.PickupPoints.AddRange(new PickupPoint { Name = "ПВЗ Центр", Address = "Москва, ул. Примерная, 1" }, new PickupPoint { Name = "ПВЗ Север", Address = "Москва, ул. Учебная, 10" });
         await db.SaveChangesAsync();
     }
@@ -65,8 +65,61 @@ app.MapGet("/api/products", async (ShopDbContext db, string? search, int? catego
     if (categoryId.HasValue) query = query.Where(x => x.CategoryId == categoryId.Value);
     if (minPrice.HasValue) query = query.Where(x => x.Price >= minPrice.Value);
     if (maxPrice.HasValue) query = query.Where(x => x.Price <= maxPrice.Value);
-    return Results.Ok(await query.OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.Description, x.Price, x.ImagePath, x.Rating, x.Stock, Category = x.Category!.Name }).ToListAsync());
+    return Results.Ok(await query.OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.Description, x.Price, x.ImagePath, Rating = db.Reviews.Where(r => r.ProductId == x.Id).Average(r => (double?)r.Rating) ?? 0d, x.Stock, Category = x.Category!.Name }).ToListAsync());
 });
+
+app.MapGet("/api/products/{productId:int}/reviews", async (int productId, ShopDbContext db) =>
+{
+    if (!await db.Products.AnyAsync(x => x.Id == productId)) return Results.NotFound();
+    var reviews = await db.Reviews.AsNoTracking().Where(x => x.ProductId == productId).OrderByDescending(x => x.CreatedAtUtc)
+        .Select(x => new { x.Id, x.Rating, x.Text, x.CreatedAtUtc, UserName = x.User!.UserName }).ToListAsync();
+    var average = reviews.Count == 0 ? 0m : Math.Round((decimal)reviews.Average(x => x.Rating), 2);
+    return Results.Ok(new { AverageRating = average, Count = reviews.Count, Items = reviews });
+});
+app.MapPost("/api/products/{productId:int}/reviews", async (int productId, ReviewRequest request, ClaimsPrincipal principal, ShopDbContext db) =>
+{
+    if (request.Rating is < 1 or > 5 || string.IsNullOrWhiteSpace(request.Text) || request.Text.Trim().Length > 1000)
+        return Results.BadRequest(new { error = "Оценка должна быть от 1 до 5, текст — от 1 до 1000 символов." });
+    if (!await db.Products.AnyAsync(x => x.Id == productId)) return Results.NotFound(new { error = "Товар не найден." });
+    var userId = UserId(principal);
+    if (await db.Reviews.AnyAsync(x => x.UserId == userId && x.ProductId == productId))
+        return Results.Conflict(new { error = "Вы уже оставили отзыв на этот товар. Его можно изменить." });
+    var review = new ProductReview { UserId = userId, ProductId = productId, Rating = request.Rating, Text = request.Text.Trim(), CreatedAtUtc = DateTime.UtcNow };
+    db.Reviews.Add(review); await db.SaveChangesAsync();
+    return Results.Created($"/api/products/{productId}/reviews", new { review.Id, review.Rating, review.Text, review.CreatedAtUtc });
+}).RequireAuthorization();
+app.MapPut("/api/products/{productId:int}/reviews", async (int productId, ReviewRequest request, ClaimsPrincipal principal, ShopDbContext db) =>
+{
+    if (request.Rating is < 1 or > 5 || string.IsNullOrWhiteSpace(request.Text) || request.Text.Trim().Length > 1000)
+        return Results.BadRequest(new { error = "Оценка должна быть от 1 до 5, текст — от 1 до 1000 символов." });
+    var userId = UserId(principal);
+    var review = await db.Reviews.SingleOrDefaultAsync(x => x.ProductId == productId && x.UserId == userId);
+    if (review is null) return Results.NotFound();
+    review.Rating = request.Rating; review.Text = request.Text.Trim(); review.CreatedAtUtc = DateTime.UtcNow;
+    await db.SaveChangesAsync(); return Results.NoContent();
+}).RequireAuthorization();
+
+app.MapGet("/api/favorites", async (ClaimsPrincipal principal, ShopDbContext db) =>
+{
+    var userId = UserId(principal);
+    return Results.Ok(await db.Favorites.AsNoTracking().Where(x => x.UserId == userId).OrderByDescending(x => x.AddedAtUtc)
+        .Select(x => new { x.ProductId, Name = x.Product!.Name, x.Product.Description, x.Product.Price, x.Product.ImagePath, x.Product.Stock, Category = x.Product.Category!.Name, Rating = db.Reviews.Where(r => r.ProductId == x.ProductId).Average(r => (double?)r.Rating) ?? 0d }).ToListAsync());
+}).RequireAuthorization();
+app.MapPost("/api/favorites/{productId:int}", async (int productId, ClaimsPrincipal principal, ShopDbContext db) =>
+{
+    if (!await db.Products.AnyAsync(x => x.Id == productId)) return Results.NotFound();
+    var userId = UserId(principal);
+    if (await db.Favorites.AnyAsync(x => x.UserId == userId && x.ProductId == productId)) return Results.Conflict(new { error = "Товар уже в избранном." });
+    db.Favorites.Add(new Favorite { UserId = userId, ProductId = productId, AddedAtUtc = DateTime.UtcNow });
+    await db.SaveChangesAsync(); return Results.NoContent();
+}).RequireAuthorization();
+app.MapDelete("/api/favorites/{productId:int}", async (int productId, ClaimsPrincipal principal, ShopDbContext db) =>
+{
+    var userId = UserId(principal);
+    var favorite = await db.Favorites.SingleOrDefaultAsync(x => x.UserId == userId && x.ProductId == productId);
+    if (favorite is null) return Results.NotFound();
+    db.Favorites.Remove(favorite); await db.SaveChangesAsync(); return Results.NoContent();
+}).RequireAuthorization();
 
 app.MapPost("/api/auth/register", async (RegisterRequest request, ShopDbContext db, IPasswordHasher<AppUser> hasher) =>
 {
@@ -167,16 +220,16 @@ app.MapGet("/api/orders/{id:int}", async (int id, ClaimsPrincipal principal, Sho
 
 app.MapPost("/api/admin/products", async (ProductRequest request, ShopDbContext db) =>
 {
-    if (string.IsNullOrWhiteSpace(request.Name) || request.Price < 0 || request.Stock < 0 || request.Rating is < 0 or > 5 || !await db.Categories.AnyAsync(x => x.Id == request.CategoryId)) return Results.BadRequest(new { error = "Проверьте поля товара и категорию." });
-    var product = new Product { Name = request.Name.Trim(), Description = request.Description.Trim(), Price = request.Price, ImagePath = SafeImage(request.ImagePath), Rating = request.Rating, Stock = request.Stock, IsAvailable = true, CategoryId = request.CategoryId };
+    if (string.IsNullOrWhiteSpace(request.Name) || request.Price < 0 || request.Stock < 0 || !await db.Categories.AnyAsync(x => x.Id == request.CategoryId)) return Results.BadRequest(new { error = "Проверьте поля товара и категорию." });
+    var product = new Product { Name = request.Name.Trim(), Description = request.Description.Trim(), Price = request.Price, ImagePath = SafeImage(request.ImagePath), Stock = request.Stock, IsAvailable = true, CategoryId = request.CategoryId };
     db.Products.Add(product); await db.SaveChangesAsync(); return Results.Created($"/api/products/{product.Id}", new { product.Id, product.Name });
 }).RequireAuthorization(policy => policy.RequireRole("Admin"));
-app.MapGet("/api/admin/products", async (ShopDbContext db) => Results.Ok(await db.Products.AsNoTracking().Include(x => x.Category).OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.Description, x.Price, x.ImagePath, x.Rating, x.Stock, x.IsAvailable, x.CategoryId, Category = x.Category!.Name }).ToListAsync())).RequireAuthorization(policy => policy.RequireRole("Admin"));
+app.MapGet("/api/admin/products", async (ShopDbContext db) => Results.Ok(await db.Products.AsNoTracking().Include(x => x.Category).OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.Description, x.Price, x.ImagePath, Rating = db.Reviews.Where(r => r.ProductId == x.Id).Average(r => (double?)r.Rating) ?? 0d, x.Stock, x.IsAvailable, x.CategoryId, Category = x.Category!.Name }).ToListAsync())).RequireAuthorization(policy => policy.RequireRole("Admin"));
 app.MapPut("/api/admin/products/{id:int}", async (int id, ProductRequest request, ShopDbContext db) =>
 {
     var product = await db.Products.FindAsync(id); if (product is null) return Results.NotFound();
-    if (string.IsNullOrWhiteSpace(request.Name) || request.Price < 0 || request.Stock < 0 || request.Rating is < 0 or > 5 || !await db.Categories.AnyAsync(x => x.Id == request.CategoryId)) return Results.BadRequest();
-    product.Name = request.Name.Trim(); product.Description = request.Description.Trim(); product.Price = request.Price; product.ImagePath = SafeImage(request.ImagePath); product.Rating = request.Rating; product.Stock = request.Stock; product.CategoryId = request.CategoryId;
+    if (string.IsNullOrWhiteSpace(request.Name) || request.Price < 0 || request.Stock < 0 || !await db.Categories.AnyAsync(x => x.Id == request.CategoryId)) return Results.BadRequest();
+    product.Name = request.Name.Trim(); product.Description = request.Description.Trim(); product.Price = request.Price; product.ImagePath = SafeImage(request.ImagePath); product.Stock = request.Stock; product.CategoryId = request.CategoryId;
     await db.SaveChangesAsync(); return Results.NoContent();
 }).RequireAuthorization(policy => policy.RequireRole("Admin"));
 app.MapPatch("/api/admin/products/{id:int}/availability", async (int id, AvailabilityRequest request, ShopDbContext db) =>
@@ -214,6 +267,12 @@ app.MapPut("/api/admin/orders/{id:int}/status", async (int id, StatusRequest req
     order.Status = status; await db.SaveChangesAsync(); return Results.NoContent();
 }).RequireAuthorization(policy => policy.RequireRole("Admin"));
 app.MapGet("/api/admin/orders", async (ShopDbContext db) => Results.Ok(await db.Orders.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).Select(x => new { x.Id, Customer = x.User!.UserName, x.CreatedAtUtc, x.Total, x.Status }).ToListAsync())).RequireAuthorization(policy => policy.RequireRole("Admin"));
+app.MapGet("/api/admin/reviews", async (ShopDbContext db) => Results.Ok(await db.Reviews.AsNoTracking().OrderByDescending(x => x.CreatedAtUtc).Select(x => new { x.Id, x.ProductId, Product = x.Product!.Name, UserName = x.User!.UserName, x.Rating, x.Text, x.CreatedAtUtc }).ToListAsync())).RequireAuthorization(policy => policy.RequireRole("Admin"));
+app.MapDelete("/api/admin/reviews/{id:int}", async (int id, ShopDbContext db) =>
+{
+    var review = await db.Reviews.FindAsync(id); if (review is null) return Results.NotFound();
+    db.Reviews.Remove(review); await db.SaveChangesAsync(); return Results.NoContent();
+}).RequireAuthorization(policy => policy.RequireRole("Admin"));
 
 app.Run();
 
@@ -254,7 +313,8 @@ record LoginRequest(string UserName, string Password);
 record CartRequest(int ProductId, int Quantity);
 record CheckoutRequest(FulfillmentType Fulfillment, string? Address, int? PickupPointId);
 record BuyRequest(FulfillmentType Fulfillment, string? Address, int? PickupPointId);
-record ProductRequest(string Name, string Description, decimal Price, string? ImagePath, decimal Rating, int Stock, int CategoryId);
+record ProductRequest(string Name, string Description, decimal Price, string? ImagePath, int Stock, int CategoryId);
+record ReviewRequest(int Rating, string Text);
 record AvailabilityRequest(bool IsAvailable);
 record NameRequest(string Name);
 record PickupRequest(string Name, string Address, bool IsActive = true);

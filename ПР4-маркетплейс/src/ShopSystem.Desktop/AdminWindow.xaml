@@ -13,7 +13,6 @@
                         <TextBox x:Name="ProductDescriptionBox" Width="210" Margin="3" ToolTip="Описание" />
                         <TextBox x:Name="ProductPriceBox" Width="80" Margin="3" ToolTip="Цена" />
                         <TextBox x:Name="ProductImageBox" Width="150" Margin="3" ToolTip="Путь к изображению" />
-                        <TextBox x:Name="ProductRatingBox" Width="70" Margin="3" ToolTip="Рейтинг 0–5" />
                         <TextBox x:Name="ProductStockBox" Width="70" Margin="3" ToolTip="Остаток" />
                         <TextBox x:Name="ProductCategoryIdBox" Width="90" Margin="3" ToolTip="ID категории" />
                         <CheckBox x:Name="ProductAvailableBox" Content="Доступен" IsChecked="True" VerticalAlignment="Center" Margin="8" />
@@ -62,6 +61,16 @@
                         </ComboBox>
                         <Button Content="Изменить статус выбранного заказа" Click="UpdateOrderStatus_Click" Margin="3" Padding="8,4" />
                         <Button Content="Обновить список" Click="RefreshOrders_Click" Margin="3" Padding="8,4" />
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+            <TabItem Header="Отзывы">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <DataGrid x:Name="ReviewsGrid" Grid.Row="0" AutoGenerateColumns="True" IsReadOnly="True" />
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,8">
+                        <Button Content="Удалить выбранный некорректный отзыв" Click="DeleteReview_Click" Margin="3" Padding="8,4" />
+                        <Button Content="Обновить отзывы" Click="RefreshReviews_Click" Margin="3" Padding="8,4" />
                     </StackPanel>
                 </Grid>
             </TabItem>

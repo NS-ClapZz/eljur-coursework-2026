@@ -9,6 +9,8 @@ public sealed class AppUser
     public string? Address { get; set; }
     public List<CartItem> CartItems { get; set; } = [];
     public List<Order> Orders { get; set; } = [];
+    public List<Favorite> Favorites { get; set; } = [];
+    public List<ProductReview> Reviews { get; set; } = [];
 }
 
 public sealed class Category
@@ -25,12 +27,35 @@ public sealed class Product
     public string Description { get; set; } = "";
     public decimal Price { get; set; }
     public string ImagePath { get; set; } = "";
-    public decimal Rating { get; set; }
     public int Stock { get; set; }
     public bool IsAvailable { get; set; } = true;
     public int CategoryId { get; set; }
     public Category? Category { get; set; }
     public List<CartItem> CartItems { get; set; } = [];
+    public List<Favorite> Favorites { get; set; } = [];
+    public List<ProductReview> Reviews { get; set; } = [];
+}
+
+public sealed class Favorite
+{
+    public int Id { get; set; }
+    public int UserId { get; set; }
+    public AppUser? User { get; set; }
+    public int ProductId { get; set; }
+    public Product? Product { get; set; }
+    public DateTime AddedAtUtc { get; set; }
+}
+
+public sealed class ProductReview
+{
+    public int Id { get; set; }
+    public int UserId { get; set; }
+    public AppUser? User { get; set; }
+    public int ProductId { get; set; }
+    public Product? Product { get; set; }
+    public int Rating { get; set; }
+    public string Text { get; set; } = "";
+    public DateTime CreatedAtUtc { get; set; }
 }
 
 public sealed class PickupPoint

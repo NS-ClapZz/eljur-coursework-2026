@@ -12,6 +12,8 @@
             <TextBox x:Name="MaxPriceBox" Width="75" Height="32" VerticalContentAlignment="Center" ToolTip="Цена до" />
             <Button Content="Найти" Click="Search_Click" />
             <Button Content="Обновить" Click="Refresh_Click" />
+            <Button Content="В избранное" Click="AddFavorite_Click" />
+            <Button Content="Избранное" Click="Favorites_Click" />
             <TextBlock x:Name="AccountText" Text="Гость — войдите, чтобы оформить заказ" VerticalAlignment="Center" Margin="18,0" />
             <Button Content="Регистрация" Click="Register_Click" />
             <Button Content="Войти" Click="Login_Click" />
@@ -43,6 +45,12 @@
                         <ComboBox x:Name="PickupPointBox" DisplayMemberPath="DisplayName" SelectedValuePath="Id" Margin="4" ToolTip="Выберите пункт выдачи" />
                         <Button Content="Оформить самовывоз" Click="Pickup_Click" />
                         <Button Content="История заказов" Click="History_Click" />
+                        <Button Content="Отзывы о выбранном товаре" Click="Reviews_Click" />
+                        <ComboBox x:Name="ReviewRatingBox" SelectedIndex="4" Margin="4" ToolTip="Оценка от 1 до 5">
+                            <ComboBoxItem Content="1"/><ComboBoxItem Content="2"/><ComboBoxItem Content="3"/><ComboBoxItem Content="4"/><ComboBoxItem Content="5"/>
+                        </ComboBox>
+                        <TextBox x:Name="ReviewTextBox" Height="58" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Margin="4" ToolTip="Текст отзыва" />
+                        <Button Content="Оставить или изменить отзыв" Click="SubmitReview_Click" />
                         <ComboBox x:Name="HistorySortBox" SelectedIndex="0" Margin="4">
                             <ComboBoxItem Content="Сначала новые" Tag="newest" />
                             <ComboBoxItem Content="Сначала старые" Tag="oldest" />
